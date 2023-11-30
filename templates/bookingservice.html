@@ -20,7 +20,6 @@
 
 <div class="container">
     <h1>Booking Service</h1>
-<!-- Inside templates/bookingservice.html -->
 
 {% if current_user.is_authenticated %}
     <p>Welcome, {{ current_user.username }}! <a href="{{ url_for('logout') }}">Logout</a></p>
@@ -162,47 +161,49 @@
             $('#errorMessage').addClass('d-none');
         }, 4000);
     }
-    function showRoomDetails(roomId) {
-        $.ajax({
-            url: `/api/room/${roomId}`,
-            method: 'GET',
-            dataType: 'json',
-            success: function (roomDetails) {
-                var modalBody = $('#roomDetailsModalBody');
-modalBody.empty();
-modalBody.append(`
-    <p><strong>Title:</strong> ${roomDetails.title}</p>
-    <p><strong>Description:</strong> ${roomDetails.description}</p>
-    <p><strong>Price:</strong> $${roomDetails.price}</p>
-    <h5>Images:</h5>
-    <div id="roomImagesCarousel" class="carousel slide" data-ride="carousel">
-        <div class="carousel-inner">
-            ${JSON.parse(roomDetails.images).map((image, index) => `
-                <div class="carousel-item ${index === 0 ? 'active' : ''}">
-                    <img src="${image}" class="d-block w-100" alt="Room Image">
+function showRoomDetails(roomId) {
+    $.ajax({
+        url: `/api/room/${roomId}`,
+        method: 'GET',
+        dataType: 'json',
+        success: function (roomDetails) {
+            var imagesArray = Array.isArray(roomDetails.images) ? roomDetails.images : JSON.parse(roomDetails.images);
+
+            var modalBody = $('#roomDetailsModalBody');
+            modalBody.empty();
+            modalBody.append(`
+                <p><strong>Title:</strong> ${roomDetails.title}</p>
+                <p><strong>Description:</strong> ${roomDetails.description}</p>
+                <p><strong>Price:</strong> $${roomDetails.price}</p>
+                <h5>Images:</h5>
+                <div id="roomImagesCarousel" class="carousel slide" data-ride="carousel">
+                    <div class="carousel-inner">
+                        ${imagesArray.map((image, index) => `
+                            <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                <img src="${image}" class="d-block w-100" alt="Room Image">
+                            </div>
+                        `).join('')}
+                    </div>
+                    <a class="carousel-control-prev" href="#roomImagesCarousel" role="button" data-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="sr-only">Previous</span>
+                    </a>
+                    <a class="carousel-control-next" href="#roomImagesCarousel" role="button" data-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="sr-only">Next</span>
+                    </a>
                 </div>
-            `).join('')}
-        </div>
-        <a class="carousel-control-prev" href="#roomImagesCarousel" role="button" data-slide="prev">
-            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-            <span class="sr-only">Previous</span>
-        </a>
-        <a class="carousel-control-next" href="#roomImagesCarousel" role="button" data-slide="next">
-            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-            <span class="sr-only">Next</span>
-        </a>
-    </div>
-`);
+            `);
 
+            $('#roomDetailsModal').modal('show');
+        },
+        error: function (error) {
+            console.error('Error fetching room details:', error);
+            alert('Error fetching room details. Please try again.');
+        }
+    });
+}
 
-                $('#roomDetailsModal').modal('show');
-            },
-            error: function (error) {
-                console.error('Error fetching room details:', error);
-                alert('Error fetching room details. Please try again.');
-            }
-        });
-    }
 
     function showList(listType) {
         if (listType === 'rooms') {
