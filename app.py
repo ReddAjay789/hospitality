@@ -7,46 +7,31 @@ from wtforms.validators import DataRequired
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 import json
+from booking_utils import BookingManager
 
 app = Flask(__name__)
 
 # Configure your PostgreSQL database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://kugopkwzozqmxm:5b8f1c823816f558074907114bc198bf8888cd952179338773dc703ed6375bff@ec2-52-4-153-146.compute-1.amazonaws.com:5432/deaq1g38r9n337'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://kugopkwzozqmxm:5b8f1c823816f558074907114bc198bf8888cd952179338773dc703ed6375bff@ec2-52-4-153-146.compute-1.amazonaws.com:5432/deaq1g38r9n337'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@hospitality.chwlezgyi7rm.eu-west-1.rds.amazonaws.com:5432/hospitality'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'  # Replace this with the output of os.urandom
 
+
+# Initialize SQLAlchemy with the app
 db = SQLAlchemy(app)
 
+# Initialize the LoginManager with the app
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Define your Room and Booking models
-class Role(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), unique=True)
+# Import your models after initializing SQLAlchemy
+from models import Role, User, Room, Booking
 
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(255), unique=True, nullable=False)
-    password = db.Column(db.String(255), nullable=False)
-    role_id = db.Column(db.Integer, db.ForeignKey('role.id'), nullable=False)
+# Initialize the BookingManager with the database
+booking_manager = BookingManager(db)
 
-    role = db.relationship('Role', backref=db.backref('users', lazy=True))
-
-class Room(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255))
-    description = db.Column(db.Text)
-    price = db.Column(db.Float)
-    image_urls = db.Column(db.JSON)
-
-class Booking(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    guest_name = db.Column(db.String(255))
-    room_id = db.Column(db.Integer, db.ForeignKey('room.id'))
-    num_guests = db.Column(db.Integer)
-    checkin_date = db.Column(db.Date)
-    checkout_date = db.Column(db.Date)
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -83,7 +68,7 @@ def bookingservice():
         for room in rooms:
             room_dict = room.__dict__
             room_dict.pop('_sa_instance_state')  # Remove SQLAlchemy-specific attribute
-            room_dict['images'] = json.loads(room_dict.pop('image_urls'))
+            room_dict['images'] = room_dict.pop('image_urls', [])  # Assuming 'image_urls' is a list
             rooms_with_images.append(room_dict)
 
         return render_template('bookingservice.html', rooms=rooms_with_images)
@@ -137,36 +122,21 @@ def book_a_room():
             return jsonify({'error': 'Check-in and check-out dates should not be earlier than today'}), 400
 
         # Check if the room is already booked for the specified date range
-        existing_booking = Booking.query.filter(
-            Booking.room_id == room_id,
-            (
-                (Booking.checkin_date <= checkin_date) & (Booking.checkout_date >= checkin_date) |
-                (Booking.checkin_date <= checkout_date) & (Booking.checkout_date >= checkout_date) |
-                (Booking.checkin_date >= checkin_date) & (Booking.checkout_date <= checkout_date)
-            )
-        ).first()
+        availability = booking_manager.is_room_available(room_id, checkin_date, checkout_date)
 
-        if existing_booking:
+        if not availability:
             app.logger.error('Room already booked for the specified date range')
             return jsonify({'error': 'Room already booked for the specified date range'}), 400
 
-        # Save booking to the database
-        new_booking = Booking(
-            guest_name=guest_name,
-            room_id=room_id,
-            num_guests=num_guests,
-            checkin_date=checkin_date,
-            checkout_date=checkout_date
-        )
-
-        db.session.add(new_booking)
-        db.session.commit()
+        # Save booking to the database using the BookingManager
+        booking_manager.book_room(guest_name, room_id, num_guests, checkin_date, checkout_date)
 
         app.logger.info('Booking successful!')
         return jsonify({'success': 'Room Booked Successfully'})
     except Exception as e:
         app.logger.error('An error occurred: %s', str(e))
         return jsonify({'error': 'An error occurred. Please try again.'}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)

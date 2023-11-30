@@ -34,5 +34,5 @@ db.session.add(admin_user)
 db.session.commit()
 
 
-# ajay_user user@123$
-# admin admin123
+# username: ajay_user  password: user@123$
+# username: admin   password: admin123
